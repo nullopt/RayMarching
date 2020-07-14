@@ -19,7 +19,7 @@ const MIN_TOLERANCE = 0.05;
 const ANGLE_START = 45;
 const ANGLE_INCREMENTS = 1;
 
-const COLOR_BACKGROUND = 'rgba(30, 30, 30, 1)';
+const COLOR_BACKGROUND = 'rgba(30, 30, 30, 0)';
 const COLOR_FILL_SHAPE = 'rgba(0, 0, 0, 1)';
 const COLOR_LINE = 'rgba(100, 100, 100, 0.5)';
 const COLOR_HIT = 'rgba(255, 180, 0, 0.5)';
@@ -30,16 +30,26 @@ const COLOR_FILL_CAMERA = 'rgba(155, 155, 155, 1)';
 const DEBUG_CIRCLES = true;
 
 /**
- * Main Canvas Element
+ * Hit Layer
  * @type {HTMLCanvasElement}
  */
-const canvas = document.querySelector('#mainCanvas');
+const hitCanvas = document.querySelector('#hitCanvas');
+/**
+ * Camera Layer
+ * @type {HTMLCanvasElement}
+ */
+const cameraCanvas = document.querySelector('#cameraCanvas');
+/**
+ * Shape Layer
+ * @type {HTMLCanvasElement}
+ */
+const shapeCanvas = document.querySelector('#shapeCanvas');
 
 /**
  * Canvas Context
  * @type {CanvasRenderingContext2D}
  */
-const ctx = canvas.getContext('2d');
+const ctx = hitCanvas.getContext('2d');
 
 /**
  * Array of shapes in scene
@@ -156,8 +166,8 @@ const reset = () => {
  * @type {Function}
  */
 const setup = () => {
-  canvas.width = CANVAS_WIDTH;
-  canvas.height = CANVAS_HEIGHT;
+  hitCanvas.width = CANVAS_WIDTH;
+  hitCanvas.height = CANVAS_HEIGHT;
 
   // generate random circles
   for (let i = 0; i < MAX_SHAPE_COUNT; i++) {
