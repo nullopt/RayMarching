@@ -8,22 +8,21 @@ const CAMERA_RADIUS = 10;
 const CAMERA_POS_X = 300;
 const CAMERA_POS_Y = 150;
 
-const MAX_SHAPE_COUNT = 30;
+const MAX_SHAPE_COUNT = 5;
 
 const MAX_VISION_DISTANCE = 1000;
 const MAX_DEPTH_SEARCH = 20;
 
 const MAX_TOLERANCE = 400;
-const MIN_TOLERANCE = 0.05;
+const MIN_TOLERANCE = 0.1;
 
 const ANGLE_START = 45;
 const ANGLE_INCREMENTS = 1;
 
-const COLOR_BACKGROUND = 'rgba(30, 30, 30, 0)';
 const COLOR_FILL_SHAPE = 'rgba(0, 0, 0, 1)';
 const COLOR_LINE = 'rgba(100, 100, 100, 0.5)';
 const COLOR_HIT = 'rgba(255, 180, 0, 0.5)';
-const COLOR_FILL_CIRCLE = 'rgba(40, 40, 40, 0.5)';
+const COLOR_FILL_CIRCLE = 'rgba(40, 40, 40, 0.3)';
 const COLOR_STROKE_CIRCLE = 'rgba(100, 100, 100, 0.5)';
 const COLOR_FILL_CAMERA = 'rgba(155, 155, 155, 1)';
 
@@ -35,21 +34,41 @@ const DEBUG_CIRCLES = true;
  */
 const hitCanvas = document.querySelector('#hitCanvas');
 /**
+ * Canvas Context
+ * @type {CanvasRenderingContext2D}
+ */
+const hitCtx = hitCanvas.getContext('2d');
+
+/**
  * Camera Layer
  * @type {HTMLCanvasElement}
  */
 const cameraCanvas = document.querySelector('#cameraCanvas');
 /**
+ * Canvas Context
+ * @type {CanvasRenderingContext2D}
+ */
+const camCtx = cameraCanvas.getContext('2d');
+
+/**
  * Shape Layer
  * @type {HTMLCanvasElement}
  */
 const shapeCanvas = document.querySelector('#shapeCanvas');
-
 /**
  * Canvas Context
  * @type {CanvasRenderingContext2D}
  */
-const ctx = hitCanvas.getContext('2d');
+const shapeCtx = shapeCanvas.getContext('2d');
+
+hitCanvas.width = CANVAS_WIDTH;
+hitCanvas.height = CANVAS_HEIGHT;
+
+cameraCanvas.width = CANVAS_WIDTH;
+cameraCanvas.height = CANVAS_HEIGHT;
+
+shapeCanvas.width = CANVAS_WIDTH;
+shapeCanvas.height = CANVAS_HEIGHT;
 
 /**
  * Array of shapes in scene
@@ -84,7 +103,7 @@ let currentAngle = ANGLE_START;
  * Move context position to the camera
  * @type {Function}
  */
-const moveToCamera = () => {
+const moveToCamera = (ctx) => {
   ctx.moveTo(camera.origin.x, camera.origin.y);
 };
 
@@ -124,7 +143,7 @@ const distanceToScene = (v) => {
  * @param {Vec2} pos
  * @param {Number} radius
  */
-const drawCircle = (pos, radius) => {
+const drawCircle = (ctx, pos, radius) => {
   ctx.beginPath();
   ctx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI);
   ctx.fillStyle = COLOR_FILL_CIRCLE;
@@ -139,11 +158,16 @@ const drawCircle = (pos, radius) => {
  * @param {Vec2} pos
  */
 const drawHit = (pos) => {
-  ctx.beginPath();
-  ctx.arc(pos.x, pos.y, 1, 0, 2 * Math.PI);
-  ctx.fillStyle = COLOR_HIT;
-  ctx.fill();
-  ctx.closePath();
+  hitCtx.beginPath();
+  hitCtx.arc(pos.pos.x, pos.pos.y, 1, 0, 2 * Math.PI);
+  hitCtx.fillStyle = COLOR_HIT;
+  hitCtx.fill();
+  hitCtx.closePath();
+};
+
+const drawBackground = () => {
+  hitCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  camCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 };
 
 /**
@@ -152,9 +176,11 @@ const drawHit = (pos) => {
  */
 const reset = () => {
   // reset scene
-  ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  ctx.fillStyle = COLOR_BACKGROUND;
-  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  drawBackground();
+
+  hitCtx.beginPath();
+  camCtx.beginPath();
+
   hits = [];
   shapes = [];
   setup();
@@ -166,8 +192,7 @@ const reset = () => {
  * @type {Function}
  */
 const setup = () => {
-  hitCanvas.width = CANVAS_WIDTH;
-  hitCanvas.height = CANVAS_HEIGHT;
+  drawBackground();
 
   // generate random circles
   for (let i = 0; i < MAX_SHAPE_COUNT; i++) {
@@ -190,6 +215,15 @@ const setup = () => {
   }
 
   sortShapes(camera.origin);
+  shapeCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  shapes.forEach((s) => {
+    shapeCtx.beginPath();
+    // draw all the shapes
+    shapeCtx.fillStyle = COLOR_FILL_SHAPE;
+    shapeCtx.fill(s.path);
+    shapeCtx.closePath();
+  });
 };
 
 /**
@@ -199,22 +233,25 @@ const setup = () => {
 const render = (angle) => {
   // get point on path from current angle
   const pointOnAngle = camera.origin.getPointOnAngleDeg(null, angle, MAX_VISION_DISTANCE);
-  ctx.beginPath();
 
   shapes.forEach((s) => {
     if (s.outerDistance(camera.origin) <= MIN_TOLERANCE) {
       reset();
     }
-    // draw all the shapes
-    ctx.fillStyle = COLOR_FILL_SHAPE;
-    ctx.fill(s.path);
 
     // set initial origin of search
     let origin = camera.origin;
     // get distance of closest object to origin
     let dist = distanceToScene(camera.origin);
+    if (dist < MIN_TOLERANCE) {
+      return;
+    }
     // draw range
-    drawCircle(origin, dist);
+    if (DEBUG_CIRCLES) {
+      drawCircle(camCtx, origin, dist);
+    }
+
+    // perform sphere tracing algorithm
     for (let i = 0; i < MAX_DEPTH_SEARCH; i++) {
       // reset origin
       if (i === 0) {
@@ -232,12 +269,12 @@ const render = (angle) => {
 
       // if we're very close to an object, we've hit
       if (dist < MIN_TOLERANCE) {
-        hits.push(point);
+        hits.push({ pos: point, dist: dist });
         return;
       }
       // draw debug circles
       if (DEBUG_CIRCLES) {
-        drawCircle(point, dist);
+        drawCircle(camCtx, point, dist);
       }
       // set origin to last point
       origin = point;
@@ -254,29 +291,26 @@ const render = (angle) => {
 
   // draw line from camera to linePos
   if (linePos) {
-    ctx.beginPath();
-    moveToCamera();
-    ctx.strokeStyle = COLOR_LINE;
-    ctx.lineWidth = 2;
-    ctx.lineTo(linePos.x, linePos.y);
-    ctx.stroke();
-    ctx.closePath();
+    camCtx.beginPath();
+    moveToCamera(camCtx);
+    camCtx.strokeStyle = COLOR_LINE;
+    camCtx.lineWidth = 2;
+    camCtx.lineTo(linePos.x, linePos.y);
+    camCtx.stroke();
+    camCtx.closePath();
   }
 
   // draw camera
-  ctx.fillStyle = COLOR_FILL_CAMERA;
-  ctx.fill(camera.path);
+  camCtx.fillStyle = COLOR_FILL_CAMERA;
+  camCtx.fill(camera.path);
 };
 
 window.onload = (e) => {
   // setup scene
   setup();
   // main loop
-  setInterval(() => {
-    // clear the scene
-    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    ctx.fillStyle = COLOR_BACKGROUND;
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  const loop = () => {
+    drawBackground();
     // reset scene if we've searched every angle
     if (currentAngle === ANGLE_START + 360) {
       reset();
@@ -285,16 +319,20 @@ window.onload = (e) => {
     render(currentAngle);
     // increment current angle
     currentAngle += ANGLE_INCREMENTS;
-  }, 1);
+
+    window.requestAnimationFrame(loop);
+  };
+
+  window.requestAnimationFrame(loop);
 };
 
-window.onmousemove = (e) => {
-  // const rect = canvas.getBoundingClientRect();
-  // const x = e.clientX - rect.left;
-  // const y = e.clientY - rect.top;
-  // linePos = new Vec2(x, y);
-  // linePos = camera.origin.extend(linePos, MAX_DISTANCE);
-};
+// window.onmousemove = (e) => {
+//   const rect = canvas.getBoundingClientRect();
+//   const x = e.clientX - rect.left;
+//   const y = e.clientY - rect.top;
+//   linePos = new Vec2(x, y);
+//   linePos = camera.origin.extend(linePos, MAX_DISTANCE);
+// };
 
 document.onclick = (e) => {
   e.preventDefault();
