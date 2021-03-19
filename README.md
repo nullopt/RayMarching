@@ -1,4 +1,4 @@
-https://www.code-inspector.com/project/20320/score/svg
+<img src="https://www.code-inspector.com/project/20320/score/svg">
 
 RayMarching
 ============
